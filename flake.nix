@@ -12,27 +12,11 @@
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
-        pkgs = import nixpkgs {inherit system;};
-
-        netrc = builtins.path {
-          name = "netrc";
-          path = ~/.netrc;
-        };
-
-        fetchurlPrivate = opts:
-          pkgs.fetchurl (opts
-            // {
-              curlOpts = "${opts.curlOpts or ""} --netrc-file ${netrc}";
-            });
-
-        buildDotnetModule = pkgs.buildDotnetModule.override {
-          mkNugetDeps = pkgs.mkNugetDeps.override {
-            fetchurl = fetchurlPrivate;
-          };
-        };
-
-        projectFile = "./BlazorSample.csproj";
         pname = "dotnet-blazor-webassembly";
+        projectFile = "./BlazorSample.csproj";
+        version = "0.0.1";
+
+        pkgs = import nixpkgs {inherit system;};
         dotnet-runtime = pkgs.dotnetCorePackages.aspnetcore_8_0;
         dotnet-sdk =
           (with pkgs.dotnetCorePackages;
@@ -63,7 +47,6 @@
               $out/dotnet workload install wasm-tools
             '';
           });
-        version = "0.0.1";
 
         # dotnet tools installer utility method
         dotnetEightTool = toolName: toolVersion: sha256:
@@ -85,6 +68,24 @@
               runHook postInstall
             '';
           };
+        nuget-to-nix = pkgs.nuget-to-nix.override {inherit dotnet-sdk;};
+        binPkgs = [
+          pkgs.coreutils
+          dotnet-sdk
+          nuget-to-nix
+          pkgs.jq
+          pkgs.yq
+          pkgs.curl
+          pkgs.gnugrep
+          pkgs.gawk
+        ];
+        shellPkgs =
+          binPkgs
+          ++ [
+            pkgs.git
+            pkgs.alejandra
+            pkgs.nodePackages.markdown-link-check
+          ];
       in {
         packages = {
           # To install dotnet tools
@@ -97,7 +98,7 @@
             pkgs.writeShellScriptBin "fetch-${pname}-deps" (builtins.readFile (pkgs.substituteAll {
               src = ./nix/fetchDeps.sh;
               pname = pname;
-              binPath = pkgs.lib.makeBinPath [pkgs.coreutils dotnet-sdk (pkgs.nuget-to-nix.override {inherit dotnet-sdk;}) pkgs.jq pkgs.yq pkgs.curl pkgs.gnugrep pkgs.gawk];
+              binPath = pkgs.lib.makeBinPath binPkgs;
               projectFiles = toString (pkgs.lib.toList projectFile);
               rids = pkgs.lib.concatStringsSep "\" \"" (runtimeIds ++ ["browser-wasm"]);
               packages = dotnet-sdk.packages;
@@ -106,8 +107,9 @@
                 pname = pname;
                 version = version;
               };
+              n2n = "${nuget-to-nix}/bin/nuget-to-nix";
             }));
-          default = buildDotnetModule {
+          default = pkgs.buildDotnetModule {
             pname = "BlazorSample";
             version = version;
             src = ./.;
@@ -149,7 +151,7 @@
         };
         devShells = {
           default = pkgs.mkShell {
-            buildInputs = [pkgs.dotnet-sdk_8 pkgs.git pkgs.alejandra pkgs.nodePackages.markdown-link-check (pkgs.nuget-to-nix.override {inherit dotnet-sdk;}) pkgs.jq pkgs.yq pkgs.curl pkgs.gnugrep pkgs.gawk];
+            buildInputs = shellPkgs;
           };
         };
       }

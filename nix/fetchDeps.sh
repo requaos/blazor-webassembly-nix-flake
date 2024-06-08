@@ -39,6 +39,7 @@ trap exitTrap EXIT INT TERM
 dotnetRestore() {
     local -r project="${1-}"
     local -r rid="$2"
+    echo "Runtime: $rid"
     dotnet restore "${project-}" \
         -p:ContinuousIntegrationBuild=true \
         -p:Deterministic=true \
@@ -51,12 +52,14 @@ declare -a projectFiles=( @projectFiles@ )
 # declare -a testProjectFiles=( @testProjectFiles@ )
 export DOTNET_NOLOGO=1
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
+n2n="@n2n@"
 depsFile=$(realpath "${1:-$(mktemp -t "@pname@-deps-XXXXXX.nix")}")
 mkdir -p "$tmp/nuget_pkgs"
 storeSrc="@storeSrc@"
 src="$tmp/src"
 cp -rT "$storeSrc" "$src"
 chmod -R +w "$src"
+pwd=$PWD
 cd "$src"
 echo "Restoring project..."
 rids=("@rids@")
@@ -69,9 +72,8 @@ for rid in "${rids[@]}"; do
 done
 echo "Successfully restored project"
 echo "Writing lockfile..."
-echo "Project source: $src"
-echo "Nuget packages source: $tmp/nuget_pkgs"
-echo "Deps file: $depsFile"
 echo -e "# This file was automatically generated.\n# Please don't edit it manually; your changes might get overwritten!\n" > "$depsFile"
-nuget-to-nix "$tmp/nuget_pkgs" "@packages@" >> "$depsFile"
+$n2n "$tmp/nuget_pkgs" "@packages@"/* >> "$depsFile"
 echo "Successfully wrote lockfile to $depsFile"
+cat $depsFile > $pwd/nix/deps.nix
+echo "Installed lockfile to $pwd/nix/deps.nix"
