@@ -1,5 +1,5 @@
 {
-  description = "Hello World in .NET";
+  description = "[Blazor WebAssembly example in .NET](https://github.com/dotnet/blazor-samples/tree/main/8.0/BlazorSample_WebAssembly)";
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
